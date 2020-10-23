@@ -171,6 +171,11 @@ func main() {
 		return
 	}
 
+	if *pfcpsim {
+		pfcpSim()
+		return
+	}
+
 	if *simulate != "" {
 		if *simulate != "create" && *simulate != "delete" {
 			log.Fatalln("Invalid simulate method", simulate)
