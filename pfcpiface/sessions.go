@@ -27,7 +27,6 @@ func NewPFCPSessionMgr(maxRetries int) *PFCPSessionMgr {
 	return &PFCPSessionMgr{
 		rng:        rand.New(rand.NewSource(time.Now().UnixNano())),
 		maxRetries: maxRetries,
-		appPFDs:    make(map[string]appPFD),
 		sessions:   make(map[uint64]PFCPSession),
 	}
 }
