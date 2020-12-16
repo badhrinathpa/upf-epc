@@ -171,6 +171,8 @@ func main() {
 		return
 	}
 
+	upf.setUpfInfo(&conf)
+
 	if *pfcpsim {
 		pfcpSim()
 		return
