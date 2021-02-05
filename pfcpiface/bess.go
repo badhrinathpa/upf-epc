@@ -278,6 +278,12 @@ func (b *bess) setUpfInfo(u *upf, conf *Conf) {
 		u.simInfo = simInfo
 	}
 
+	u.ippoolCidr = conf.CPIface.UeIPPool
+	log.Println("IP pool : ", u.ippoolCidr)
+	errin := u.ippool.initPool(u.ippoolCidr)
+	if errin != nil {
+		log.Println("ip pool init failed")
+	}
 	u.accessIP = ParseIP(conf.AccessIface.IfName, "Access")
 	u.coreIP = ParseIP(conf.CoreIface.IfName, "Core")
 	if *n4SrcIPStr != "" {
@@ -299,7 +305,6 @@ func (b *bess) setUpfInfo(u *upf, conf *Conf) {
 		}
 	}
 	// get bess grpc client
-	var errin error
 	log.Println("bessIP ", *bessIP)
 
 	b.conn, errin = grpc.Dial(*bessIP, grpc.WithInsecure())
@@ -417,7 +422,8 @@ func (b *bess) sim(u *upf, method string) {
 			farID: n3,
 			fseID: n3TEID + i,
 
-			action:       farForwardD,
+			applyAction:  ActionForward,
+			dstIntf:      ie.DstInterfaceAccess,
 			tunnelType:   0x1,
 			tunnelIP4Src: ip2int(u.accessIP),
 			tunnelIP4Dst: ip2int(enbip) + enbIdx,
@@ -430,14 +436,16 @@ func (b *bess) sim(u *upf, method string) {
 			farID: n6,
 			fseID: n3TEID + i,
 
-			action: farForwardU,
+			applyAction: ActionForward,
+			dstIntf:     ie.DstInterfaceCore,
 		}
 
 		farN9Up := far{
 			farID: n9,
 			fseID: n3TEID + i,
 
-			action:       farForwardU,
+			applyAction:  ActionForward,
+			dstIntf:      ie.DstInterfaceCore,
 			tunnelType:   0x1,
 			tunnelIP4Src: ip2int(u.coreIP),
 			tunnelIP4Dst: ip2int(aupfip),
@@ -641,7 +649,7 @@ func (b *bess) addFAR(ctx context.Context, done chan<- bool, far far) {
 	go func() {
 		var any *anypb.Any
 		var err error
-
+		action := far.setActionValue()
 		f := &pb.ExactMatchCommandAddArg{
 			Gate: uint64(far.tunnelType),
 			Fields: []*pb.FieldData{
@@ -649,7 +657,7 @@ func (b *bess) addFAR(ctx context.Context, done chan<- bool, far far) {
 				intEnc(uint64(far.fseID)), /* fseid */
 			},
 			Values: []*pb.FieldData{
-				intEnc(uint64(far.action)),       /* action */
+				intEnc(uint64(action)),           /* action */
 				intEnc(uint64(far.tunnelType)),   /* tunnel_out_type */
 				intEnc(uint64(far.tunnelIP4Src)), /* access-ip */
 				intEnc(uint64(far.tunnelIP4Dst)), /* enb ip */

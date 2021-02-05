@@ -13,8 +13,21 @@ import (
 type operation int
 
 const (
-	FwdIE_OuterHeaderCreation Bits = 1 << iota
-	FwdIE_DestinationIntf
+	//FwdIEOuterHeaderCreation ...
+	FwdIEOuterHeaderCreation Bits = 1 << iota
+	//FwdIEDestinationIntf ...
+	FwdIEDestinationIntf
+)
+
+const (
+	//ActionForward ...
+	ActionForward = 0x2
+	//ActionDrop ...
+	ActionDrop = 0x1
+	//ActionBuffer ...
+	ActionBuffer = 0x4
+	//ActionNotify ...
+	ActionNotify = 0x8
 )
 
 const (
@@ -27,7 +40,7 @@ type far struct {
 	fseID   uint32
 	fseidIP uint32
 
-	action       uint8
+	dstIntf      uint8
 	applyAction  uint8
 	tunnelType   uint8
 	tunnelIP4Src uint32
@@ -41,7 +54,7 @@ func (f *far) printFAR() {
 	log.Println("FAR ID:", f.farID)
 	log.Println("fseID:", f.fseID)
 	log.Println("fseIDIP:", f.fseidIP)
-	log.Println("action:", f.action)
+	log.Println("dstIntf:", f.dstIntf)
 	log.Println("applyAction:", f.applyAction)
 	log.Println("tunnelType:", f.tunnelType)
 	log.Println("tunnelIP4Src:", f.tunnelIP4Src)
@@ -49,6 +62,25 @@ func (f *far) printFAR() {
 	log.Println("tunnelTEID:", f.tunnelTEID)
 	log.Println("tunnelPort:", f.tunnelPort)
 	log.Println("--------------------------------------------")
+}
+
+func (f *far) setActionValue() uint8 {
+	if (f.applyAction & ActionForward) != 0 {
+		if f.dstIntf == ie.DstInterfaceAccess {
+			return farForwardD
+		} else if f.dstIntf == ie.DstInterfaceCore {
+			return farForwardU
+		}
+	} else if (f.applyAction & ActionDrop) != 0 {
+		return farDrop
+	} else if (f.applyAction & ActionBuffer) != 0 {
+		return farBuffer
+	} else if (f.applyAction & ActionNotify) != 0 {
+		return farNotify
+	}
+
+	//default action
+	return farDrop
 }
 
 func (f *far) parseFAR(farIE *ie.IE, fseid uint64, upf *upf, op operation) error {
@@ -63,13 +95,6 @@ func (f *far) parseFAR(farIE *ie.IE, fseid uint64, upf *upf, op operation) error
 	action, err := farIE.ApplyAction()
 	if err != nil {
 		return err
-	}
-
-	if (action&0x02)>>1 == 0 {
-		log.Println("Handling forward action only")
-		// TODO: Handle buffer
-		f.action = farDrop
-		return nil
 	}
 
 	f.applyAction = action
@@ -92,7 +117,7 @@ func (f *far) parseFAR(farIE *ie.IE, fseid uint64, upf *upf, op operation) error
 	for _, fwdIE := range fwdIEs {
 		switch fwdIE.Type {
 		case ie.OuterHeaderCreation:
-			fields = Set(fields, FwdIE_OuterHeaderCreation)
+			fields = Set(fields, FwdIEOuterHeaderCreation)
 			ohcFields, err := fwdIE.OuterHeaderCreation()
 			if err != nil {
 				log.Println("Unable to parse OuterHeaderCreationFields!")
@@ -103,17 +128,15 @@ func (f *far) parseFAR(farIE *ie.IE, fseid uint64, upf *upf, op operation) error
 			f.tunnelType = uint8(1)
 			f.tunnelPort = tunnelGTPUPort
 		case ie.DestinationInterface:
-			fields = Set(fields, FwdIE_DestinationIntf)
-			dstIface, err := fwdIE.DestinationInterface()
+			fields = Set(fields, FwdIEDestinationIntf)
+			f.dstIntf, err = fwdIE.DestinationInterface()
 			if err != nil {
 				log.Println("Unable to parse DestinationInterface field")
 				continue
 			}
-			if dstIface == ie.DstInterfaceAccess {
-				f.action = farForwardD
+			if f.dstIntf == ie.DstInterfaceAccess {
 				f.tunnelIP4Src = ip2int(upf.accessIP)
-			} else if dstIface == ie.DstInterfaceCore {
-				f.action = farForwardU
+			} else if f.dstIntf == ie.DstInterfaceCore {
 				f.tunnelIP4Src = ip2int(upf.coreIP)
 			}
 		}
