@@ -26,6 +26,8 @@ class Parser:
         self.conf = get_json_conf(self.name, False)
         self.max_ip_defrag_flows = None
         self.ip_frag_with_eth_mtu = None
+        self.hwcksum = False
+        self.ddp = False
         self.measure = False
         self.mode = None
         self.sim_core = None
@@ -64,13 +66,23 @@ class Parser:
         except KeyError:
             print('ip_frag_with_eth_mtu value not set. Not installing IP4Frag module.')
 
+        # Enable hardware checksum
+        try:
+            self.hwcksum = bool(self.conf["hwcksum"] == 'True' or self.conf["hwcksum"] == 'true')
+        except KeyError:
+            print('hwcksum not set, using default software fallback')
+
+        # Enable DDP
+        try:
+            self.ddp = bool(self.conf["ddp"] == 'True' or self.conf["ddp"] == 'true')
+        except KeyError:
+            print('ddp not set, using default software fallback')
+
         # Telemtrics
         # See this link for details:
         # https://github.com/NetSys/bess/blob/master/bessctl/module_tests/timestamp.py
         try:
-            self.measure = bool(self.conf["measure"])
-        except ValueError:
-            print('Invalid value for measure. Not installing Measure module.')
+            self.measure = bool(self.conf["measure"] == 'True' or self.conf["measure"] == 'true')
         except KeyError:
             print('measure value not set. Not installing Measure module.')
 
@@ -130,6 +142,6 @@ class Parser:
 
         # Network Token Function
         try:
-            self.enable_ntf = bool(self.conf['enable_ntf'])
+            self.enable_ntf = bool(self.conf['enable_ntf'] == 'True' or self.conf['enable_ntf'] == 'true')
         except KeyError:
             print('Network Token Function disabled')

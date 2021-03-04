@@ -28,6 +28,12 @@
     "": "Update the line below to `\"ip_frag_with_eth_mtu\": 1518` to enable",
     "": "ip_frag_with_eth_mtu: 1518",
 
+    "": "Enable hardware offload of checksum. Might disable vector PMD",
+    "": "hwcksum: True",
+
+    "": "Enable Intel Dynamic Device Personalization (DDP)",
+    "": "ddp: True",
+
     "": "Telemetrics-See this link for details: https://github.com/NetSys/bess/blob/master/bessctl/module_tests/timestamp.py",
     "measure": true,
 
@@ -42,7 +48,7 @@
         "": "ip_masquerade: 18.0.0.1 or 18.0.0.2 or 18.0.0.3"
     },
 
-    "": "Number of worker threads. Default: use 1 thread to run both (uplink/downlink) pipelines",
+    "": "Number of worker threads. Default: 1",
     "workers": 1,
 
     "": "Whether to enable Network Token Functions",
@@ -57,7 +63,8 @@
         "ue_ip_pool": "10.250.0.0/16",
         "nb_dst_ip": "172.17.0.1",
         "" : "nb_dst_ip: CPHostname",
-	    "hostname": "spgwc"
+        "hostname": "spgwc",
+        "prom_port": "8089"
     },
     
     "": "p4rtc interface settings",
