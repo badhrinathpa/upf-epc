@@ -60,7 +60,7 @@ func (b *bess) sendEndMarkers(endMarkerList *[][]byte) error {
 	return nil
 }
 
-func (b *bess) sendMsgToUPF(method string, pdrs []pdr, fars []far) uint8 {
+func (b *bess) sendMsgToUPF(method string, pdrs []pdr, fars []far, qers []qer) uint8 {
 	// create context
 	var cause uint8 = ie.CauseRequestAccepted
 	calls := len(pdrs) + len(fars)

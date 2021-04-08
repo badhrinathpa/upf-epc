@@ -46,11 +46,13 @@ type notifyFlag struct {
 
 // PFCPSession implements one PFCP session
 type PFCPSession struct {
+<<<<<<< HEAD
 	localSEID        uint64
 	remoteSEID       uint64
 	notificationFlag notifyFlag
 	pdrs             []pdr
 	fars             []far
+	qers             []qer
 }
 
 // NewPFCPSession allocates an session with ID
@@ -67,6 +69,7 @@ func (mgr *PFCPSessionMgr) NewPFCPSession(rseid uint64) uint64 {
 			remoteSEID: rseid,
 			pdrs:       make([]pdr, 0, MaxItems),
 			fars:       make([]far, 0, MaxItems),
+			qers:       make([]qer, 0, MaxItems),
 		}
 		mgr.sessions[lseid] = &s
 		globalPfcpStats.sessions.WithLabelValues(mgr.nodeID).Set(float64(len(mgr.sessions)))
