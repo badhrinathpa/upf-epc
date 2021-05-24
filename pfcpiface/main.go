@@ -25,16 +25,17 @@ var (
 
 // Conf : Json conf struct
 type Conf struct {
-	Mode        string      `json:"mode"`
-	MaxSessions uint32      `json:"max_sessions"`
-	AccessIface IfaceType   `json:"access"`
-	CoreIface   IfaceType   `json:"core"`
-	CPIface     CPIfaceInfo `json:"cpiface"`
-	P4rtcIface  P4rtcInfo   `json:"p4rtciface"`
-	EnableP4rt  bool        `json:"enable_p4rt"`
-	SimInfo     SimModeInfo `json:"sim"`
-	ConnTimeout uint32      `json:"conn_timeout"`
-	ReadTimeout uint32      `json:"read_timeout"`
+	Mode              string      `json:"mode"`
+	MaxSessions       uint32      `json:"max_sessions"`
+	AccessIface       IfaceType   `json:"access"`
+	CoreIface         IfaceType   `json:"core"`
+	CPIface           CPIfaceInfo `json:"cpiface"`
+	P4rtcIface        P4rtcInfo   `json:"p4rtciface"`
+	EnableP4rt        bool        `json:"enable_p4rt"`
+	SimFastPathEnable bool        `json:"enable_sim_fast_path"`
+	SimInfo           SimModeInfo `json:"sim"`
+	ConnTimeout       uint32      `json:"conn_timeout"`
+	ReadTimeout       uint32      `json:"read_timeout"`
 }
 
 // SimModeInfo : Sim mode attributes
@@ -128,10 +129,14 @@ func main() {
 	ParseJSON(configPath, &conf)
 	log.Println(conf)
 
-	if conf.EnableP4rt {
-		intf = &p4rtc{}
+	if conf.SimFastPathEnable {
+		intf = &simFastPath{}
 	} else {
-		intf = &bess{}
+		if conf.EnableP4rt {
+			intf = &p4rtc{}
+		} else {
+			intf = &bess{}
+		}
 	}
 
 	// fetch fqdn. Prefer json field
