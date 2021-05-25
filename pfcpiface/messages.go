@@ -457,7 +457,7 @@ func (pc *PFCPConn) handleSessionModificationRequest(upf *upf, msg message.Messa
 			return sendError(err)
 		}
 		f.fseidIP = fseidIP
-		err = session.UpdateFAR(f)
+		err = session.UpdateFAR(&f)
 		if err != nil {
 			log.Println("session PDR update failed ", err)
 			continue

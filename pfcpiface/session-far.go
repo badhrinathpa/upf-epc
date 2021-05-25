@@ -13,10 +13,15 @@ func (s *PFCPSession) CreateFAR(f far) {
 }
 
 // UpdateFAR updates existing far in the session
-func (s *PFCPSession) UpdateFAR(f far) error {
+func (s *PFCPSession) UpdateFAR(f *far) error {
 	for idx, v := range s.fars {
 		if v.farID == f.farID {
-			s.fars[idx] = f
+			f.oldTunnelTEID = v.tunnelTEID
+			f.oldTunnelIP4Dst = v.tunnelIP4Dst
+			f.oldTunnelIP4Src = v.tunnelIP4Src
+			f.oldTunnelType = v.tunnelType
+			f.oldTunnelPort = v.tunnelPort
+			s.fars[idx] = *f
 			return nil
 		}
 	}

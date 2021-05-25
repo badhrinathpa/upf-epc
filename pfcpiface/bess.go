@@ -12,6 +12,8 @@ import (
 	"net"
 	"time"
 
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
 	pb "github.com/omec-project/upf-epc/pfcpiface/bess_pb"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/wmnsk/go-pfcp/ie"
@@ -22,6 +24,9 @@ import (
 // SockAddr : Unix Socket path to read bess notification from
 const SockAddr = "/tmp/notifycp"
 
+// PfcpAddr : Unix Socket path to send end marker packet
+const PfcpAddr = "/tmp/pfcpport"
+
 var intEnc = func(u uint64) *pb.FieldData {
 	return &pb.FieldData{Encoding: &pb.FieldData_ValueInt{ValueInt: u}}
 }
@@ -31,8 +36,9 @@ var (
 )
 
 type bess struct {
-	client pb.BESSControlClient
-	conn   *grpc.ClientConn
+	client        pb.BESSControlClient
+	conn          *grpc.ClientConn
+	endMarkerChan chan []byte
 }
 
 func (b *bess) setInfo(udpConn *net.UDPConn, udpAddr net.Addr, pconn *PFCPConn) {
@@ -76,6 +82,7 @@ func (b *bess) sendMsgToUPF(method string, pdrs []pdr, fars []far) uint8 {
 			fallthrough
 		case "mod":
 			b.addFAR(ctx, done, far)
+			b.checkAndSendEndMarker(far)
 		case "del":
 			b.delFAR(ctx, done, far)
 		}
@@ -101,6 +108,61 @@ func (b *bess) sendDeleteAllSessionsMsgtoUPF() {
 	rc := b.GRPCJoin(calls, Timeout, done)
 	if !rc {
 		log.Println("Unable to make GRPC calls")
+	}
+}
+
+func (b *bess) checkAndSendEndMarker(farItem far) {
+	// This time lets fill out some information
+	if farItem.sendEndMarker {
+		log.Println("Sending end Marker for farID : ", farItem.farID)
+		options := gopacket.SerializeOptions{
+			ComputeChecksums: true,
+			FixLengths:       true,
+		}
+		buffer := gopacket.NewSerializeBuffer()
+		payload := []byte{2, 4, 6}
+		ipLayer := &layers.IPv4{
+			Version:  4,
+			TTL:      64,
+			SrcIP:    int2ip(farItem.oldTunnelIP4Src),
+			DstIP:    int2ip(farItem.oldTunnelIP4Dst),
+			Protocol: layers.IPProtocolUDP,
+		}
+		ethernetLayer := &layers.Ethernet{
+			//SrcMAC: net.HardwareAddr{0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+			//DstMAC: net.HardwareAddr{0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+			SrcMAC:       net.HardwareAddr{0xFF, 0xAA, 0xFA, 0xAA, 0xFF, 0xAA},
+			DstMAC:       net.HardwareAddr{0xBD, 0xBD, 0xBD, 0xBD, 0xBD, 0xBD},
+			EthernetType: layers.EthernetTypeIPv4,
+		}
+		udpLayer := &layers.UDP{
+			SrcPort: layers.UDPPort(2152),
+			DstPort: layers.UDPPort(2152),
+		}
+
+		udpLayer.SetNetworkLayerForChecksum(ipLayer)
+
+		gtpLayer := &layers.GTPv1U{
+			Version:      1,
+			MessageType:  254,
+			ProtocolType: farItem.oldTunnelType,
+			TEID:         farItem.oldTunnelTEID,
+		}
+		// And create the packet with the layers
+		err := gopacket.SerializeLayers(buffer, options,
+			ethernetLayer,
+			ipLayer,
+			udpLayer,
+			gtpLayer,
+			gopacket.Payload(payload),
+		)
+
+		if err == nil {
+			outgoingPacket := buffer.Bytes()
+			b.endMarkerChan <- outgoingPacket
+		} else {
+			log.Println("go packet serialize failed : ", err)
+		}
 	}
 }
 
@@ -247,6 +309,31 @@ func (b *bess) summaryLatencyJitter(uc *upfCollector, ch chan<- prometheus.Metri
 
 }
 
+func (b *bess) endMarkerSendLoop(pfcpCommAddr string, endMarkerChan chan []byte) {
+	if pfcpCommAddr == "" {
+		pfcpCommAddr = PfcpAddr
+	}
+	unixConn, err := net.Dial("unixpacket", pfcpCommAddr)
+	if err != nil {
+		log.Println("dial error:", err)
+		return
+	}
+	defer unixConn.Close()
+
+	for {
+		select {
+		case outPacket := <-endMarkerChan:
+			_, err := unixConn.Write(outPacket)
+			if err != nil {
+				log.Println("end marker write failed")
+			}
+
+		default:
+			time.Sleep(2 * time.Second)
+		}
+	}
+}
+
 func (b *bess) notifyListen(notifySockAddr string, reportNotifyChan chan<- uint64) {
 	if notifySockAddr == "" {
 		notifySockAddr = SockAddr
@@ -286,6 +373,7 @@ func (b *bess) setUpfInfo(u *upf, conf *Conf) {
 
 	// get bess grpc client
 	log.Println("bessIP ", *bessIP)
+	b.endMarkerChan = make(chan []byte, 1024)
 
 	b.conn, errin = grpc.Dial(*bessIP, grpc.WithInsecure())
 	if errin != nil {
@@ -294,6 +382,7 @@ func (b *bess) setUpfInfo(u *upf, conf *Conf) {
 
 	b.client = pb.NewBESSControlClient(b.conn)
 	go b.notifyListen(conf.NotifySockAddr, u.reportNotifyChan)
+	go b.endMarkerSendLoop(conf.EndMarkerSockAddr, b.endMarkerChan)
 }
 
 func (b *bess) sim(u *upf, method string) {
