@@ -112,6 +112,13 @@ void GtpuEncap::ProcessBatch(Context *ctx, bess::PacketBatch *batch) {
     off = attr_offset(tout_uport);
     at_tout_uport = get_attr_with_offset<uint16_t>(off, p);
 
+    std::cout << "pdu type: " << static_cast<uint16_t>(at_pdu_type)
+               << ", tunnel qfi: " << static_cast<unsigned>(at_qfi)
+               << ", tunnel out sip: " << static_cast<unsigned>(at_tout_sip)
+               << ", tunnel out dip: " << static_cast<unsigned>(at_tout_dip)
+               << ", tunnel out teid: " << static_cast<unsigned>(at_tout_teid)
+               << ", tunnel out udp port: " << static_cast<unsigned>(at_tout_uport) << std::endl;
+
     /* checking values now */
     DLOG(INFO) << "pdu type: " << static_cast<uint16_t>(at_pdu_type)
                << ", tunnel qfi: " << at_qfi

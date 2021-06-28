@@ -97,7 +97,7 @@ func (b *bess) sendMsgToUPF(method string, pdrs []pdr, fars []far, qers []qer) u
 		}
 	}
 	for _, qer := range qers {
-		// qer.printQER()
+		qer.printQER()
 		switch method {
 		case "add":
 			fallthrough
@@ -383,7 +383,7 @@ func (b *bess) sim(u *upf, method string) {
 			fseID:     uint64(n3TEID + i),
 			ctrID:     i,
 			farID:     n3,
-			qerID:     n3,
+			qerID:     n3 + 5,
 			needDecap: 0,
 		}
 
@@ -401,7 +401,7 @@ func (b *bess) sim(u *upf, method string) {
 			fseID:     uint64(n3TEID + i),
 			ctrID:     i,
 			farID:     n3,
-			qerID:     n3,
+			qerID:     n3 + 5,
 			needDecap: 1,
 		}
 
@@ -422,7 +422,7 @@ func (b *bess) sim(u *upf, method string) {
 			fseID:     uint64(n3TEID + i),
 			ctrID:     i,
 			farID:     n6,
-			qerID:     n6,
+			qerID:     n6 + 5,
 			needDecap: 1,
 		}
 
@@ -442,7 +442,7 @@ func (b *bess) sim(u *upf, method string) {
 			fseID:     uint64(n3TEID + i),
 			ctrID:     i,
 			farID:     n9,
-			qerID:     n9,
+			qerID:     n9 + 5,
 			needDecap: 1,
 		}
 
@@ -488,40 +488,37 @@ func (b *bess) sim(u *upf, method string) {
 
 		// create/delete uplink qer
 		qerDown := qer{
-			qerID: n3,
+			qerID: n3 + 5,
 			fseID: uint64(n3TEID + i),
 
-			qfi:      9,
-			ulStatus: 0,
-			dlStatus: 0,
-			ulMbr:    50000,
-			dlMbr:    50000,
-			ulGbr:    50000,
-			dlGbr:    50000,
+			qfi: 9,
+			cir: 50000,
+			pir: 50000,
+			cbs: 2048,
+			pbs: 2048,
+			ebs: 2048,
 		}
 
 		qerN6Up := qer{
-			qerID:    n6,
-			fseID:    uint64(n3TEID + i),
-			qfi:      8,
-			ulStatus: 0,
-			dlStatus: 0,
-			ulMbr:    50000,
-			dlMbr:    50000,
-			ulGbr:    50000,
-			dlGbr:    50000,
+			qerID: n6 + 5,
+			fseID: uint64(n3TEID + i),
+			qfi:   8,
+			cir:   50000,
+			pir:   50000,
+			cbs:   2048,
+			pbs:   2048,
+			ebs:   2048,
 		}
 
 		qerN9Up := qer{
-			qerID:    n9,
-			fseID:    uint64(n3TEID + i),
-			qfi:      7,
-			ulStatus: 0,
-			dlStatus: 0,
-			ulMbr:    50000,
-			dlMbr:    50000,
-			ulGbr:    50000,
-			dlGbr:    50000,
+			qerID: n9 + 5,
+			fseID: uint64(n3TEID + i),
+			qfi:   7,
+			cir:   50000,
+			pir:   50000,
+			cbs:   2048,
+			pbs:   2048,
+			ebs:   2048,
 		}
 
 		qers := []qer{qerDown, qerN6Up, qerN9Up}
@@ -646,7 +643,8 @@ func (b *bess) processQER(ctx context.Context, any *anypb.Any, method string) {
 		return
 	}
 
-	_, err := b.client.ModuleCommand(ctx, &pb.CommandRequest{
+	log.Println("processQER ", method)
+	val, err := b.client.ModuleCommand(ctx, &pb.CommandRequest{
 		Name: "qerLookup",
 		Cmd:  method,
 		Arg:  any,
@@ -654,26 +652,28 @@ func (b *bess) processQER(ctx context.Context, any *anypb.Any, method string) {
 	if err != nil {
 		log.Println("qerLookup method failed!:", err)
 	}
+	log.Println("process QER : ", val)
 }
 
 func (b *bess) addQER(ctx context.Context, done chan<- bool, qer qer) {
 	go func() {
 		var any *anypb.Any
 		var err error
-		q := &pb.ExactMatchCommandAddArg{
+		log.Println("addQER ", qer.qerID)
+		q := &pb.QosCommandAddArg{
 			Gate: uint64(0),
 			Fields: []*pb.FieldData{
 				intEnc(uint64(qer.qerID)), /* far_id */
 				intEnc(uint64(qer.fseID)), /* fseid */
+				//intEnc(uint64(qer.srcIntf)), /* Src Intf */
 			},
 			Values: []*pb.FieldData{
-				intEnc(uint64(qer.qfi)),      /* action */
-				intEnc(uint64(qer.ulStatus)), /* QFI */
-				intEnc(uint64(qer.dlStatus)), /* tunnel_out_type */
-				intEnc(uint64(qer.ulMbr)),    /* access-ip */
-				intEnc(uint64(qer.dlMbr)),    /* enb ip */
-				intEnc(uint64(qer.ulGbr)),    /* enb teid */
-				intEnc(uint64(qer.dlGbr)),    /* udp gtpu port */
+				intEnc(uint64(qer.qfi)), /* action */
+				intEnc(uint64(qer.cir)), /* committed info rate */
+				intEnc(uint64(qer.pir)), /* Peak Info rate */
+				intEnc(uint64(qer.cbs)), /* committed burst size */
+				intEnc(uint64(qer.pbs)), /* Peak burst size */
+				intEnc(uint64(qer.ebs)), /* Excess burst size */
 			},
 		}
 		any, err = anypb.New(q)
@@ -691,10 +691,11 @@ func (b *bess) delQER(ctx context.Context, done chan<- bool, qer qer) {
 		var any *anypb.Any
 		var err error
 
-		q := &pb.ExactMatchCommandDeleteArg{
+		q := &pb.QosCommandDeleteArg{
 			Fields: []*pb.FieldData{
 				intEnc(uint64(qer.qerID)), /* qer_id */
 				intEnc(uint64(qer.fseID)), /* fseid */
+				//intEnc(uint64(qer.srcIntf)), /* Src Intf */
 			},
 		}
 		any, err = anypb.New(q)
